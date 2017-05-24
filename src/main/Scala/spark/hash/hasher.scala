@@ -3,7 +3,7 @@ package spark.hash
 /**
   * Created by jackzhang on 5/16/17.
   */
-import scala.util.Random
+/*import scala.util.Random
 import org.apache.spark.mllib.linalg.SparseVector
 
 /**
@@ -45,5 +45,5 @@ object Hasher {
     new Random().nextInt(p)
   }
 
-}
+}*/
 
