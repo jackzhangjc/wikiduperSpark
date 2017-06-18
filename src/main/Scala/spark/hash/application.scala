@@ -26,7 +26,6 @@ class confApplication(args: Seq[String]) extends ScallopConf(args) {
   val SHINGLELEN = opt[Int](descr = "SHINGLELEN", required = false, default = Some(12))
   val rseed = opt[Int](descr = "rseed", required = false, default = Some(112345))
   val NHASHOUTPUTBITS = opt[Int](descr = "NHASHOUTPUTBITS", required = false, default = Some(30))
-  //val reducers = opt[Int](descr = "number of reducers", required = false, default = Some(1))
   verify()
 }
 
@@ -45,32 +44,31 @@ object Application {
     log.info("output" + args.output())
     val textFile = sc.textFile(args.input())
     val output = args.output()
-    val NHASH = args.NHASH()
-    val SHINGLELEN = args.SHINGLELEN()
-    val MAXLEN = args.MAXLEN()
-    val MINLEN = args.MINLEN()
+
+    val NHASH = sc.broadcast(args.NHASH())
+    val SHINGLELEN = sc.broadcast(args.SHINGLELEN())
+    val MAXLEN = sc.broadcast(args.MAXLEN())
+    val MINLEN = sc.broadcast(args.MINLEN())
     val rseed = args.rseed()
     val NHASHOUTPUTBITS = args.NHASHOUTPUTBITS()
-    val N = args.N()
-    val K = args.K()
+    val N = sc.broadcast(args.N())
+    val K = sc.broadcast(args.K())
     var seeds = ListBuffer[Long]()
     var r = new Random(rseed)
-    for (i <- 0 to NHASH - 1) {
+    for (i <- 0 to args.NHASH() - 1) {
       seeds += r.nextLong()
     }
-    val sigseed = r.nextLong()
-    val hasher = Hasher.create(NHASHOUTPUTBITS, seeds.toList)
+    val sigseed = sc.broadcast(r.nextLong())
+    val hasher = sc.broadcast(Hasher.create(NHASHOUTPUTBITS, seeds.toList))
 
 
 
     val outputDir = new Path(args.output())
     FileSystem.get(sc.hadoopConfiguration).delete(outputDir, true)
 
-    //val shingles = sc.parallelize(test_data)flatMap(line => line.split("\\t"))
     val shingles = textFile
       .map(line => {
         val line_list = line.split("\\t")
-        //line_list[0]
         (line_list(0), line_list(1))
       })
       .flatMap(t => {
@@ -79,23 +77,18 @@ object Application {
 
         // Minhash vector
         // Initialize the minhash vector
-        var MINHASH = ListBuffer.fill(NHASH)(Long.MaxValue)
-        //var MINHASH = Long.MaxValue
+        var MINHASH = ListBuffer.fill(NHASH.value)(Long.MaxValue)
         // Create shingle.
 
         // Hash
         var shinglect = 0
-        if (sentence.length() >= SHINGLELEN) {
+        if (sentence.length() >= SHINGLELEN.value) {
 
-          for (i <- 0 to sentence.length() - SHINGLELEN) {
-            val shingle = sentence.substring(i, i + SHINGLELEN)
+          for (i <- 0 to sentence.length() - SHINGLELEN.value) {
+            val shingle = sentence.substring(i, i + SHINGLELEN.value)
 
             // Create the list of hash values
-            val hash = hasher.hash(shingle)
-            //val hash = shingle.hashCode()
-            //println(hash)
-
-            //MINHASH = Math.min(MINHASH, hash)
+            val hash = hasher.value.hash(shingle)
 
             // Update minhash signature
             for (j <- 0 to hash.length - 1) {
@@ -104,19 +97,18 @@ object Application {
             shinglect += 1
           }
 
-          if (shinglect < MAXLEN && shinglect > MINLEN) {
-            val r = new Random(sigseed)
+          if (shinglect < MAXLEN.value && shinglect > MINLEN.value) {
+            val r = new Random(sigseed.value)
             var list = ListBuffer[(String, (String, String))]()
-            for (j <- 0 to N - 1) {
+            for (j <- 0 to N.value - 1) {
               var signature = ""
-              for (i <- 0 to K - 1) {
-                val x = r.nextInt(NHASH)
+              for (i <- 0 to K.value - 1) {
+                val x = r.nextInt(NHASH.value)
                 signature += MINHASH(x).toString()
               }
               println(signature)
               list += ((signature, (id, sentence)))
             }
-            //(MINHASH, (id, sentence))
             list.toList
           } else {
             List()
@@ -125,9 +117,6 @@ object Application {
           List()
         }
       })
-      /*.filter(t => {
-        t._1 != 0
-      })*/
       .groupByKey()
       .map(t => {
         var hashmap = new HashMap[String, (String, String)]
@@ -142,6 +131,5 @@ object Application {
       //.collect()
       .saveAsTextFile(output)
       //.foreach(println)
-
   }
 }

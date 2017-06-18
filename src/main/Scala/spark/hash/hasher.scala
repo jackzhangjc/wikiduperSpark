@@ -62,9 +62,6 @@ class MultipleShiftHash(m : Int, seeds : List[Long]) extends Serializable {
     hash(v.toList)
   }
 
-  /*def minhash(v: SparseVector): Int = {
-    v.indices.map(i => hash(i)).min
-  }*/
 }
 
 object Hasher {
